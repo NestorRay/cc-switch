@@ -1,0 +1,63 @@
+name: Build Windows x64 Installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-x64:
+    name: Build Windows x64 MSI
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js 22.12.0
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.12.0"
+
+      - name: Setup pnpm 10.12.3
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.3"
+          run_install: false
+
+      - name: Verify pnpm version
+        shell: pwsh
+        run: pnpm --version
+
+      - name: Setup Rust 1.95
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95"
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Build unsigned Windows x64 MSI
+        shell: pwsh
+        run: >-
+          pnpm tauri build
+          --target x86_64-pc-windows-msvc
+          --bundles msi
+          --config src-tauri/tauri.unsigned.conf.json
+
+      - name: Upload Windows x64 installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: cc-switch-windows-x64-msi
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
